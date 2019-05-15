@@ -102,6 +102,10 @@ class AbstractLinuxCommand(commands.Command):
             return
 
         for check in op_members:
+            # redhat-specific garbage
+            if check.startswith("__UNIQUE_ID_rh_kabi_hide"):
+                continue
+
             addr = int(ops.m(check))
 
             if addr and addr != 0 and addr != -1:
@@ -140,7 +144,7 @@ def walk_internal_list(struct_name, list_member, list_start, addr_space = None):
         list_start = getattr(list_struct, list_member)
 
 # based on __d_path
-def do_get_path(rdentry, rmnt, dentry, vfsmnt):
+def do_get_path(dentry, rmnt, rdentry, vfsmnt):
     ret_path = []
 
     inode = dentry.d_inode
@@ -149,16 +153,16 @@ def do_get_path(rdentry, rmnt, dentry, vfsmnt):
         return []
 
     while (dentry != rdentry or vfsmnt != rmnt) and dentry.d_name.name.is_valid():
-        dname = dentry.d_name.name.dereference_as("String", length = MAX_STRING_LENGTH)
-
-        ret_path.append(dname.strip('/'))
-
         if dentry == vfsmnt.mnt_root or dentry == dentry.d_parent:
+            ret_path.append('')
             if vfsmnt.mnt_parent == vfsmnt.v():
                 break
             dentry = vfsmnt.mnt_mountpoint
             vfsmnt = vfsmnt.mnt_parent
             continue
+        
+        dname = dentry.d_name.name.dereference_as("String", length = MAX_STRING_LENGTH)
+        ret_path.append(dname.strip('/'))
 
         parent = dentry.d_parent
         dentry = parent
@@ -186,8 +190,13 @@ def _get_path_file(task, filp):
     rmnt    = task.fs.get_root_mnt()
     dentry  = filp.dentry
     vfsmnt  = filp.vfsmnt
-    
-    return do_get_path(rdentry, rmnt, dentry, vfsmnt)
+   
+    key = "%x|%x|%x|%x" % (rdentry.v(), rmnt.v(), dentry.v(), vfsmnt.v())
+
+    if not key in task.obj_vm.profile.dentry_cache:
+        task.obj_vm.profile.dentry_cache[key] = do_get_path(rdentry, rmnt, dentry, vfsmnt)
+
+    return task.obj_vm.profile.dentry_cache[key]
 
 def get_new_sock_pipe_path(task, filp):
     dentry = filp.dentry

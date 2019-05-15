@@ -53,13 +53,14 @@ class mac_route(common.AbstractMacCommand):
 
             rn = rn.rn_parent.rn_u.rn_node.rn_R
 
-            while rn.is_valid() and rn.rn_bit >= 0:
+            i = 0
+            while i < 1024 and rn.is_valid() and rn.rn_bit >= 0:
                 rn = rn.rn_u.rn_node.rn_L
+                i = i + 1
 
             nextptr = rn
 
             while base.v() != 0:
-    
                 rn = base
                 base = rn.rn_u.rn_leaf.rn_Dupedkey
 
@@ -85,7 +86,8 @@ class mac_route(common.AbstractMacCommand):
         rts = self._get_table(ipv4table)
 
         for rt in rts:
-            yield rt
+            if rt.is_valid():
+                yield rt
 
     def unified_output(self, data):
 
